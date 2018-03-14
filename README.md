@@ -53,9 +53,9 @@ Au fil du déploiement des informations s'affiche sur des vérification a faire 
 
 
 ## Glossaire
-[INFO] : informe sur le déploiement
-[TODO] : Tache a faire : récupération de la partie page de maintenance et push vers votre webappmaintenance
-[TUTO] : check point pour vous faire manipuler sur ce tutorial
+- [INFO] : informe sur le déploiement
+- [TODO] : Tache a faire : récupération de la partie page de maintenance et push vers votre webappmaintenance
+- [TUTO] : check point pour vous faire manipuler sur ce tutorial
 
 --------------
 
@@ -114,7 +114,7 @@ A long the running you will have some checkpoint to check what is done and what 
 
 
 ## Dictionnary
-[INFO] : information 
-[TODO] : task to do : one thing to do get the maintenance web page and push to azure
-[TUTO] : check point
+- [INFO] : information 
+- [TODO] : task to do : one thing to do get the maintenance web page and push to azure
+- [TUTO] : check point
 
