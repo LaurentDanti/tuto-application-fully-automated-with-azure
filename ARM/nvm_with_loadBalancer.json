@@ -1,0 +1,332 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "virtualMachineNamePrefix": {
+            "type": "string",
+            "metadata": {
+                "description": "Prefix to use for virtual machine names (will be suffixed with the index)"
+            }
+        },
+        "namePrefix": {
+            "type": "string",
+            "metadata": {
+                "description": "Prefix to use for other resources (will be suffixed with types and indexes)"
+            }
+        },
+        "vmSku": {
+            "type": "string",
+            "defaultValue": "Standard_DS2_V2",
+            "metadata": {
+                "description": "VM size for the VM, default is Standard_D2_V2"
+            }
+        },
+        "windowsOSVersion": {
+            "type": "string",
+            "defaultValue": "2016-Datacenter",
+            "metadata": {
+                "description": "The Windows Server version for the VM. This will pick a fully patched image of this given Windows version"
+            }
+        },
+        "instanceCount": {
+            "type": "int",
+            "defaultValue": 2,
+            "metadata": {
+                "description": "Number of VM instances (100 or less)."
+            },
+            "maxValue": 100
+        },
+        "adminUsername": {
+            "type": "string",
+            "metadata": {
+                "description": "Admin username on all VMs."
+            }
+        },
+        "adminPassword": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Admin password on all VMs."
+            }
+        },
+        "availabilitySetPlatformFaultDomainCount": {
+            "defaultValue": "2",
+            "type": "string"
+        },
+        "availabilitySetPlatformUpdateDomainCount": {
+            "defaultValue": "5",
+            "type": "string"
+        },
+        "storageAccountType":{
+            "type": "string",
+            "defaultValue": "Standard_LRS"
+        },
+        "subnetName":{
+            "type": "String",
+            "metadata": {
+                "description": "The name of the subnet where the infrastructure will be deployed"
+            }
+        },
+        "virtualNetworkName":{
+            "type": "String",
+            "metadata": {
+                "description": "The name of the virtual network where the infrastructure will be deployed"
+            }
+        },
+        "virtualNetworkResourceGroup":{
+            "type": "String",
+            "metadata": {
+                "description": "The name of the resource group where the virtual network is stored"
+            }
+        }
+    },
+    "variables": {
+        "computeApi": "2016-04-30-preview",
+        "nicApi": "2015-05-01-preview",
+        "networkApi": "2016-07-01",
+        "storageApi": "2015-06-15",
+        "publicIPAddressType": "Dynamic",
+        "uniqueNamePrefix": "[concat(parameters('namePrefix'), take(uniqueString(parameters('namePrefix')), 6))]",
+        "virtualNetworkID": "[resourceId(parameters('virtualNetworkResourceGroup'), 'Microsoft.Network/virtualNetworks', parameters('virtualNetworkName'))]",
+        "availabilitySetName": "[concat(variables('uniqueNamePrefix'), 'as')]",
+        "networkInterfaceName": "[concat(variables('uniqueNamePrefix'), 'nic')]",
+        "publicIPAddressName": "[concat(variables('uniqueNamePrefix'), 'pub')]",
+        "lbName": "[concat(variables('uniqueNamePrefix'), 'lb')]",
+        "dnsNameforLBIP": "[concat(variables('uniqueNamePrefix'), 'dns')]",
+        "storageAccountName": "[toLower(concat(parameters('namePrefix'), take(uniqueString(parameters('namePrefix')), 6)))]",
+        "subnetID": "[concat(variables('virtualNetworkID'),'/subnets/', parameters('subnetName'))]",
+        "publicIPAddressID": "[resourceId('Microsoft.Network/publicIPAddresses',variables('publicIPAddressName'))]",
+        "lbID": "[resourceId('Microsoft.Network/loadBalancers',variables('lbName'))]",
+        "frontEndIPConfigID": "[concat(variables('lbID'),'/frontendIPConfigurations/LoadBalancerFrontEnd')]",
+        "lbPoolID": "[concat(variables('lbID'),'/backendAddressPools/BackendPool1')]",
+        "lbProbeID": "[concat(variables('lbID'),'/probes/tcpProbe')]"
+     },
+    "resources": [
+      {
+        "name": "[concat(variables('networkInterfaceName'), copyindex())]",
+        "type": "Microsoft.Network/networkInterfaces",
+        "apiVersion": "[variables('nicApi')]",
+        "location": "[resourceGroup().location]",
+        "copy": {
+            "name": "nicLoop",
+            "count": "[parameters('instanceCount')]"
+        },
+        "dependsOn": [
+            "[concat('Microsoft.Network/loadBalancers/', variables('lbName'))]"
+        ],
+        "properties": {
+            "ipConfigurations": [
+                {
+                    "name": "ipconfig1",
+                    "properties": {
+                        "subnet": {
+                            "id": "[variables('subnetID')]"
+                        },
+                        "privateIPAllocationMethod": "Dynamic",
+                        "loadBalancerBackendAddressPools": [
+                          {
+                            "id": "[concat(variables('lbID'), '/backendAddressPools/BackendPool1')]"
+                          }
+                        ],
+                        "loadBalancerInboundNatRules": [
+                          {
+                            "id": "[concat(variables('lbID'),'/inboundNatRules/RDP-VM', copyindex())]"
+                          }
+                        ]
+                    }
+                }
+            ],
+            "enableIPForwarding": "false"
+        }
+      },
+      {
+            "name": "[variables('availabilitySetName')]",
+            "type": "Microsoft.Compute/availabilitySets",
+            "apiVersion": "2016-04-30-preview",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "platformFaultDomainCount": "[parameters('availabilitySetPlatformFaultDomainCount')]",
+                "platformUpdateDomainCount": "[parameters('availabilitySetPlatformUpdateDomainCount')]",
+        	    "managed" : "true"
+            }
+        },
+        {
+            "name": "[variables('storageAccountName')]",
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "[variables('storageApi')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "accountType": "[parameters('storageAccountType')]"
+            }
+        },
+      {
+        "type": "Microsoft.Compute/virtualMachines",
+        "name": "[concat(parameters('virtualMachineNamePrefix'), copyindex())]",
+        "copy": {
+            "name": "virtualMachineLoop",
+            "count": "[parameters('instanceCount')]"
+        },
+        "location": "[resourceGroup().location]",
+        "apiVersion": "[variables('computeApi')]",
+        "dependsOn": [
+          "[concat('Microsoft.Network/networkInterfaces/', variables('networkInterfaceName'), copyindex())]",
+          "[concat('Microsoft.Compute/availabilitySets/', variables('availabilitySetName'))]",
+          "[concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName'))]"
+        ],
+        "properties": {
+            "availabilitySet": {
+                "id": "[resourceId('Microsoft.Compute/availabilitySets', variables('availabilitySetName'))]"
+            },
+            "hardwareProfile": {
+                "vmSize":"[parameters('vmSku')]"
+            },
+            "osProfile": {
+                "computerName": "[concat(parameters('virtualMachineNamePrefix'), copyIndex())]",
+                "adminUsername": "[parameters('adminUsername')]",
+                "adminPassword": "[parameters('adminPassword')]",
+                "windowsConfiguration": {
+                    "provisionVmAgent": "true",
+                    "enableAutomaticUpdates": "false",
+                    "timeZone": "Romance Standard Time",
+                    "winRM": {
+                        "listeners": [
+                            {
+                                "protocol": "http"
+                            }
+                        ]
+                    }
+                }    
+            },
+            "storageProfile": {
+                "imageReference": {
+                    "publisher": "MicrosoftWindowsServer",
+                    "offer": "WindowsServer",
+                    "sku": "[parameters('windowsOSVersion')]",
+                    "version": "latest"
+                },
+                "osDisk": {
+                    "createOption": "FromImage"
+                }
+            },
+            "networkProfile": {
+                "networkInterfaces": [
+                    {
+                        "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(variables('networkInterfaceName'), copyIndex()))]"
+                    }
+                ]
+            }
+            
+        }
+      },
+      {
+        "apiVersion": "2015-05-01-preview",
+        "type": "Microsoft.Network/publicIPAddresses",
+        "name": "[variables('publicIPAddressName')]",
+        "location": "[resourceGroup().location]",
+        "properties": {
+          "publicIPAllocationMethod": "[variables('publicIPAddressType')]",
+          "dnsSettings": {
+            "domainNameLabel": "[variables('dnsNameforLBIP')]"
+          }
+        }
+      },
+      {
+        "apiVersion": "2015-05-01-preview",
+        "name": "[variables('lbName')]",
+        "type": "Microsoft.Network/loadBalancers",
+        "location": "[resourceGroup().location]",
+        "dependsOn": [
+          "[concat('Microsoft.Network/publicIPAddresses/', variables('publicIPAddressName'))]"
+        ],
+        "properties": {
+          "frontendIPConfigurations": [
+            {
+              "name": "LoadBalancerFrontEnd",
+              "properties": {
+                "publicIPAddress": {
+                  "id": "[variables('publicIPAddressID')]"
+                }
+              }
+            }
+          ],
+          "backendAddressPools": [
+            {
+              "name": "BackendPool1"
+            }
+          ],
+          "inboundNatRules": [
+            {
+              "name": "RDP-VM0",
+              "properties": {
+                "frontendIPConfiguration": {
+                  "id": "[variables('frontEndIPConfigID')]"
+                },
+                "protocol": "tcp",
+                "frontendPort": 50001,
+                "backendPort": 3389,
+                "enableFloatingIP": false
+              }
+            },
+            {
+              "name": "RDP-VM1",
+              "properties": {
+                "frontendIPConfiguration": {
+                  "id": "[variables('frontEndIPConfigID')]"
+                },
+                "protocol": "tcp",
+                "frontendPort": 50002,
+                "backendPort": 3389,
+                "enableFloatingIP": false
+              }
+            }
+          ],
+          "loadBalancingRules": [
+            {
+              "name": "LBRule",
+              "properties": {
+                "frontendIPConfiguration": {
+                  "id": "[variables('frontEndIPConfigID')]"
+                },
+                "backendAddressPool": {
+                  "id": "[variables('lbPoolID')]"
+                },
+                "protocol": "tcp",
+                "frontendPort": 80,
+                "backendPort": 7474,
+                "enableFloatingIP": false,
+                "idleTimeoutInMinutes": 5,
+                "probe": {
+                  "id": "[variables('lbProbeID')]"
+                }
+              }
+            }
+          ],
+          "probes": [
+            {
+              "name": "tcpProbe",
+              "properties": {
+                "protocol": "http",
+                "port": 7474,
+                "requestPath": "/",
+                "intervalInSeconds": 5,
+                "numberOfProbes": 2
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "outputs": {
+        "hostname1": {
+			"value": "[concat(parameters('virtualMachineNamePrefix'),'0')]",
+			"type": "string"
+		},
+        "hostip1": {
+			"value": "[reference(concat(variables('networkInterfaceName'), '0')).ipConfigurations[0].properties.privateIPAddress]",
+			"type": "string"
+        },
+        "dns": {
+			"value": "[variables('dnsNameforLBIP')]",
+			"type": "string"
+        }        
+	}
+}

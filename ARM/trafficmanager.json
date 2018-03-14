@@ -1,0 +1,136 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "trafficName": {
+            "type": "string",
+            "metadata": {
+                "description": "Traffic Manager  name."
+            }
+        },
+        "trafficdnsName": {
+            "type": "string",
+            "metadata": {
+                "description": "Traffic Manager profile DNS name. Must be unique in .trafficmanager.net"
+            }
+        },
+        "trafficRoutingMethod": {
+            "type": "string",
+            "allowedValues": [
+                "Priority",
+                "Weighted",
+                "Performance"
+            ],
+            "defaultValue": "Priority",
+            "metadata": {
+                "description": "Traffic routing methods available in Traffic Manager"
+            }
+        },
+        "targetIpAddressId": {
+            "type": "string",
+            "metadata": {
+                "description": "ID of the target public IP address resource"
+            }
+        },
+        "targetIpAddressFqdn": {
+            "type": "string",
+            "metadata": {
+                "description": "FQDN of the target public IP address"
+            }
+        },
+        "targetIpAddressIdMaintenance": {
+            "type": "string",
+            "metadata": {
+                "description": "ID of the target maintenance ID"
+            }
+        },
+        "targetIpAddressFqdnMaintenance": {
+            "type": "string",
+            "metadata": {
+                "description": "FQDN of the target maintenance fqdn"
+            }
+        },
+        "targetLocationMaintenance": {
+            "type": "string",
+            "defaultValue": "North Europe",
+            "metadata": {
+                "description": "Location maintenance"
+            }
+        },
+        "monitoringProtocol": {
+            "type": "string",
+            "defaultValue": "https",
+            "metadata": {
+                "description": "Protocol used to monitor the target"
+            }
+        },
+        "monitoringPort": {
+            "type": "int",
+            "defaultValue": 443,
+            "metadata": {
+                "description": "Port used to monitor the target"
+            }
+        },
+        "monitoringPath": {
+            "type": "string",
+            "metadata": {
+                "description": "Path used to monitor the target"
+            }
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "apiVersion": "2015-11-01",
+            "type": "Microsoft.Network/trafficManagerProfiles",
+            "name": "[parameters('trafficName')]",
+            "location": "global",
+            "dependsOn": [],
+            "properties": {
+                "profileStatus": "Enabled",
+                "trafficRoutingMethod": "[parameters('trafficRoutingMethod')]",
+                "dnsConfig": {
+                    "relativeName": "[parameters('trafficdnsName')]",
+                    "ttl": 30
+                },
+                "monitorConfig": {
+                    "protocol": "[parameters('monitoringProtocol')]",
+                    "port": "[parameters('monitoringPort')]",
+                    "path": "[parameters('monitoringPath')]"
+                },
+                "endpoints": [
+                    {
+                        "name": "Application Endpoint",
+                        "type": "Microsoft.Network/trafficManagerProfiles/azureEndpoints",
+                        "properties": {
+                            "endpointStatus": "Enabled",
+                            "targetResourceId": "[parameters('targetIpAddressId')]",
+                            "targetResourceFqdn": "[parameters('targetIpAddressFqdn')]",
+                            "weight": 1,
+                            "priority": 1,
+                            "endpointLocation": "West Europe"
+                        }
+                    },
+                    {
+                        "name": "Maintenance",
+                        "type": "Microsoft.Network/trafficManagerProfiles/azureEndpoints",
+                        "properties": {
+                            "endpointStatus": "Enabled",
+                            "targetResourceId": "[parameters('targetIpAddressIdMaintenance')]",
+                            "target": "[parameters('targetIpAddressFqdnMaintenance')]",
+                            "weight": 1,
+                            "priority": 2,
+                            "endpointLocation": "[parameters('targetLocationMaintenance')]"
+                        }
+                    }
+                ]
+            }
+        }
+    ],
+    "outputs": {
+        "TrafficManager": {
+            "type": "object",
+            "value": "[reference(parameters('trafficName'))]"
+        }
+    }
+}

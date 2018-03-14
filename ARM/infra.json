@@ -1,0 +1,41 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "virtualNetworks_name": {
+            "type": "string"
+        },
+        "vnetPrefix": {
+            "type": "string",
+            "defaultValue": "10.222"
+        },
+        "subnets": {
+            "type": "string",
+            "metadata": {
+                "description": "Configuration of different subnet"
+            }
+        }
+    },
+    "variables": {
+        "vnetprefix": "[concat(parameters('vnetPrefix'),'.0.0/16')]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Network/virtualNetworks",
+            "name": "[parameters('virtualNetworks_name')]",
+            "apiVersion": "2017-03-01",
+            "location": "[resourceGroup().location]",
+            "scale": null,
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "[variables('vnetprefix')]"
+                    ]
+                },
+                "subnets": "[json(parameters('subnets'))]",
+                "virtualNetworkPeerings": []
+            },
+            "dependsOn": []
+        }
+    ]
+}

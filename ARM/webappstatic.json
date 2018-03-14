@@ -1,0 +1,76 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "webAppName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the web app that you wish to create."
+            }
+        },
+        "ResourceGroupPlan": {
+            "type": "string",
+            "defaultValue": "LO-DMZ-PUBLIC-IN-RG",
+            "metadata": {
+                "description": "Plan resource group"
+            }
+        },
+        "PlanName": {
+            "type": "string",
+            "defaultValue": "prodappplan",
+            "metadata": {
+                "description": "Plan name"
+            }
+        },
+        "Location": {
+            "type": "string",
+            "defaultValue": "West Europe",
+            "metadata": {
+                "description": "Configuration location on webapp"
+            }
+        }
+    },
+    "variables": {        
+        "appServicePlanName": "[concat(parameters('PlanName'),'asp')]",
+        "appConfigName": "[concat(parameters('webAppName'),'/web')]"
+    },
+    "resources": [
+        {
+            "apiVersion": "2016-08-01",
+            "name": "[parameters('webAppName')]",
+            "type": "Microsoft.Web/sites",
+            "location": "[parameters('Location')]",
+            "scale": null,
+            "properties": {
+                "enabled": true,
+                "name": "[parameters('webAppName')]",
+                "serverFarmId": "[resourceId(parameters('ResourceGroupPlan'),'Microsoft.Web/serverFarms',variables('appServicePlanName'))]",
+                "reserved": false,
+                "siteConfig": null,
+                "scmSiteAlsoStopped": false,
+                "hostingEnvironmentProfile": null,
+                "clientAffinityEnabled": true,
+                "clientCertEnabled": false,
+                "hostNamesDisabled": false,
+                "containerSize": 0,
+                "dailyMemoryTimeQuota": 0,
+                "cloningInfo": null
+            }
+        },
+        {
+            "apiVersion": "2016-08-01",
+            "name": "[variables('appConfigName')]",
+            "type": "Microsoft.Web/sites/config",
+            "location": "[parameters('Location')]",
+            "scale": null,
+            "properties": {
+                "numberOfWorkers": 1,
+                "managedPipelineMode": "Integrated",
+                "scmType": "LocalGit"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', parameters('webAppName'))]"
+            ]
+        }
+    ]
+}

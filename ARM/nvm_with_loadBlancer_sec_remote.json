@@ -1,0 +1,251 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "virtualMachineNamePrefix": {
+            "type": "string",
+            "metadata": {
+                "description": "Prefix to use for virtual machine names (will be suffixed with the index)"
+            }
+        },
+        "namePrefix": {
+            "type": "string",
+            "metadata": {
+                "description": "Prefix to use for other resources (will be suffixed with types and indexes)"
+            }
+        },
+        "vmSku": {
+            "type": "string",
+            "defaultValue": "Standard_D2_V2",
+            "metadata": {
+                "description": "VM size for the VM, default is Standard_D2_V2"
+            }
+        },
+        "windowsOSVersion": {
+            "type": "string",
+            "defaultValue": "2016-Datacenter",
+            "metadata": {
+                "description": "The Windows Server version for the VM. This will pick a fully patched image of this given Windows version"
+            }
+        },
+        "instanceCount": {
+            "type": "int",
+            "defaultValue": 2,
+            "metadata": {
+                "description": "Number of VM instances (100 or less)."
+            },
+            "maxValue": 100
+        },
+        "adminUsername": {
+            "type": "string",
+            "metadata": {
+                "description": "Admin username on all VMs."
+            }
+        },
+        "adminPassword": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Admin password on all VMs."
+            }
+        },
+        "availabilitySetPlatformFaultDomainCount": {
+            "defaultValue": "2",
+            "type": "string"
+        },
+        "availabilitySetPlatformUpdateDomainCount": {
+            "defaultValue": "5",
+            "type": "string"
+        },
+        "storageAccountType":{
+            "type": "string",
+            "defaultValue": "Standard_LRS"
+        },
+        "subnetName":{
+            "type": "String",
+            "metadata": {
+                "description": "The name of the subnet where the infrastructure will be deployed"
+            }
+        },
+        "virtualNetworkName":{
+            "type": "String",
+            "metadata": {
+                "description": "The name of the virtual network where the infrastructure will be deployed"
+            }
+        },
+        "virtualNetworkResourceGroup":{
+            "type": "String",
+            "metadata": {
+                "description": "The name of the resource group where the virtual network is stored"
+            }
+        },
+        "winrmCertificateResourceGroup": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of an existing resource group containing a keyvault for winrm certificates."
+            },
+            "defaultValue": "LODH-Infrastructure"
+        },
+        "winrmCertificateKeyvault": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of an existing keyvault for winrm certificates."
+            },
+            "defaultValue": "lab-hostcertificates"
+        },
+        "winrmCertificateName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the certificate in the keyvault named winrmCertificateKeyvault."
+            },
+            "defaultValue": "lab-selfsigned-star-certificate"
+        }
+    },
+    "variables": {
+        "computeApi": "2016-04-30-preview",
+        "nicApi": "2015-05-01-preview",
+        "networkApi": "2016-07-01",
+        "storageApi": "2015-06-15",
+        "uniqueNamePrefix": "[concat(parameters('namePrefix'), take(uniqueString(parameters('namePrefix')), 6))]",
+        "virtualNetworkID": "[resourceId(parameters('virtualNetworkResourceGroup'), 'Microsoft.Network/virtualNetworks', parameters('virtualNetworkName'))]",
+        "availabilitySetName": "[concat(variables('uniqueNamePrefix'), 'as')]",
+        "networkInterfaceName": "[concat(variables('uniqueNamePrefix'), 'nic')]",
+        "storageAccountName": "[toLower(concat(parameters('namePrefix'), take(uniqueString(parameters('namePrefix')), 6)))]",
+        "subnetID": "[concat(variables('virtualNetworkID'),'/subnets/', parameters('subnetName'))]",
+        "winrmCertificateKeyvaultId": "[resourceId(parameters('winrmCertificateResourceGroup'), 'Microsoft.KeyVault/vaults/', parameters('winrmCertificateKeyvault'))]",
+        "winrmCertificateUrlResourceId": "[resourceId(parameters('winrmCertificateResourceGroup'), 'Microsoft.KeyVault/vaults/secrets', parameters('winrmCertificateKeyvault'), parameters('winrmCertificateName'))]"
+    },
+    "resources": [
+      {
+        "name": "[concat(variables('networkInterfaceName'), copyindex())]",
+        "type": "Microsoft.Network/networkInterfaces",
+        "apiVersion": "[variables('nicApi')]",
+        "location": "[resourceGroup().location]",
+        "copy": {
+            "name": "nicLoop",
+            "count": "[parameters('instanceCount')]"
+        },
+        "dependsOn": [
+        ],
+        "properties": {
+            "ipConfigurations": [
+                {
+                    "name": "ipconfig1",
+                    "properties": {
+                        "subnet": {
+                            "id": "[variables('subnetID')]"
+                        },
+                        "privateIPAllocationMethod": "Dynamic"
+                    }
+                }
+            ],
+            "enableIPForwarding": "false"
+        }
+      },
+      {
+            "name": "[variables('availabilitySetName')]",
+            "type": "Microsoft.Compute/availabilitySets",
+            "apiVersion": "2016-04-30-preview",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "platformFaultDomainCount": "[parameters('availabilitySetPlatformFaultDomainCount')]",
+                "platformUpdateDomainCount": "[parameters('availabilitySetPlatformUpdateDomainCount')]",
+        	    "managed" : "true"
+            }
+        },
+        {
+            "name": "[variables('storageAccountName')]",
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "[variables('storageApi')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "accountType": "[parameters('storageAccountType')]"
+            }
+        },
+      {
+        "type": "Microsoft.Compute/virtualMachines",
+        "name": "[concat(parameters('virtualMachineNamePrefix'), copyindex())]",
+        "copy": {
+            "name": "virtualMachineLoop",
+            "count": "[parameters('instanceCount')]"
+        },
+        "location": "[resourceGroup().location]",
+        "apiVersion": "[variables('computeApi')]",
+        "dependsOn": [
+          "[concat('Microsoft.Network/networkInterfaces/', variables('networkInterfaceName'), copyindex())]",
+          "[concat('Microsoft.Compute/availabilitySets/', variables('availabilitySetName'))]",
+          "[concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName'))]"
+        ],
+        "properties": {
+            "availabilitySet": {
+                "id": "[resourceId('Microsoft.Compute/availabilitySets', variables('availabilitySetName'))]"
+            },
+            "hardwareProfile": {
+                "vmSize":"[parameters('vmSku')]"
+            },
+            "osProfile": {
+                "computerName": "[concat(parameters('virtualMachineNamePrefix'), copyIndex())]",
+                "adminUsername": "[parameters('adminUsername')]",
+                "adminPassword": "[parameters('adminPassword')]",
+                "secrets": [
+                    {
+                        "sourceVault": {
+                            "id": "[variables('winrmCertificateKeyvaultId')]"
+                        },
+                        "vaultCertificates": [
+                            {
+                                "certificateUrl": "[reference(variables('winrmCertificateUrlResourceId'), '2015-06-01').secretUriWithVersion]",
+                                "certificateStore": "My"
+                            }
+                        ]
+                    }
+                ],
+                "windowsConfiguration": {
+                    "provisionVmAgent": "true",
+                    "enableAutomaticUpdates": "false",
+                    "timeZone": "Romance Standard Time",
+                    "winRM": {
+                        "listeners": [
+                            {
+                                "protocol": "http"
+                            },
+                            {
+                                "protocol": "https",
+                                "certificateUrl": "[reference(variables('winrmCertificateUrlResourceId'), '2015-06-01').secretUriWithVersion]"
+                            }
+                        ]
+                    }
+                }    
+            },
+            "storageProfile": {
+                "imageReference": {
+                    "publisher": "MicrosoftWindowsServer",
+                    "offer": "WindowsServer",
+                    "sku": "[parameters('windowsOSVersion')]",
+                    "version": "latest"
+                },
+                "osDisk": {
+                    "createOption": "FromImage"
+                }
+            },
+            "networkProfile": {
+                "networkInterfaces": [
+                    {
+                        "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(variables('networkInterfaceName'), copyIndex()))]"
+                    }
+                ]
+            }
+            
+        }
+      }
+    ],
+    "outputs": {
+        "hostname1": {
+			"value": "[concat(parameters('virtualMachineNamePrefix'),'0')]",
+			"type": "string"
+		},
+        "hostip1": {
+			"value": "[reference(concat(variables('networkInterfaceName'), '0')).ipConfigurations[0].properties.privateIPAddress]",
+			"type": "string"
+		}
+	}
+}
